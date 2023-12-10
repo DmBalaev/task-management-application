@@ -16,12 +16,12 @@
 1. Склонируйте репозиторий с приложением:
 
     ```bash
-    git clone https://github.com/your-username/task-manager-app.git
+    git clone https://github.com/DmBalaev/task-management-application.git
     ```
 
 2. Перейдите в каталог приложения:
     ```bash
-    cd task-manager-app
+    cd task-management-application
     ```
 3. Соберите проект:
    ```bash
