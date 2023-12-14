@@ -42,12 +42,12 @@ public class Task {
     @Column(name = "priority")
     private TaskPriority priority;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JsonIgnore
     @JoinColumn(name = "author_id")
     private Account author;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JsonIgnore
     @JoinColumn(name = "assignee_id")
     private Account assignee;
