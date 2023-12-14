@@ -3,6 +3,7 @@ package com.dm.taskapp.task;
 import com.dm.taskapp.account.AccountRepository;
 import com.dm.taskapp.app.ApiResponse;
 import com.dm.taskapp.exceptions.ApiException;
+import com.dm.taskapp.exceptions.InsufficientPermissionsException;
 import com.dm.taskapp.exceptions.ResourceNotFound;
 import com.dm.taskapp.task.enums.TaskPriority;
 import com.dm.taskapp.task.enums.TaskStatus;
@@ -14,6 +15,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Objects;
 
 import static com.dm.taskapp.task.enums.TaskPriority.isPriority;
@@ -27,8 +29,12 @@ public class TaskServiceImpl implements TaskService{
     private final AccountRepository accountRepository;
 
     @Override
-    public Task updateTask(TaskUpdateRequest request) {
+    public Task updateTask(TaskUpdateRequest request, UserDetails userDetails) {
         var task = findTask(request.getId());
+        if (isNotCreator(userDetails, task)){
+            throw new InsufficientPermissionsException
+                    ("You are not the author of this issue, you do not have rights to update the issue");
+        }
         task.setTitle(request.getTitle());
         task.setDescription(request.getDescription());
         log.info("Update task with {} id", request.getId());
@@ -37,7 +43,12 @@ public class TaskServiceImpl implements TaskService{
     }
 
     @Override
-    public ApiResponse deleteTask(Long taskId) {
+    public ApiResponse deleteTask(Long taskId, UserDetails userDetails) {
+        var task = findTask(taskId);
+        if (isNotCreator(userDetails, task)){
+            throw new InsufficientPermissionsException
+                    ("You are not the author of this task, you do not have rights to delete the task");
+        }
         taskRepository.deleteById(taskId);
         log.info("Delete task with {} id", taskId);
 
@@ -45,10 +56,13 @@ public class TaskServiceImpl implements TaskService{
     }
 
     @Override
-    public Task assignTask(Long taskId, Long accountId) {
+    public Task assignTask(Long taskId, Long accountId, UserDetails userDetails) {
         var account = accountRepository.findById(accountId)
                 .orElseThrow(()-> new ResourceNotFound("Account not found"));
-        Task task = findTask(taskId);
+        var task = findTask(taskId);
+        if (isNotCreator(userDetails, task) && !account.getEmail().equals(userDetails.getUsername())){
+            throw new InsufficientPermissionsException("Only the author can assign his task to others");
+        }
         task.setAssignee(account);
         task.setStatus(TaskStatus.IN_PROGRESS);
         log.info("Assign task {} -> account {}", taskId, accountId );
@@ -56,9 +70,16 @@ public class TaskServiceImpl implements TaskService{
         return taskRepository.save(task);
     }
 
+    private static boolean isNotCreator(UserDetails userDetails, Task task) {
+        return !task.getAuthor().getEmail().equals(userDetails.getUsername());
+    }
+
     @Override
-    public ApiResponse unsignTask(Long taskId) {
+    public ApiResponse unsignTask(Long taskId, UserDetails userDetails) {
         var task = findTask(taskId);
+        if (isNotCreator(userDetails, task)){
+            throw new InsufficientPermissionsException("Only the author can remove his task to others");
+        }
         task.setAssignee(null);
         taskRepository.save(task);
         log.info("Unsign task {}", taskId );
@@ -84,8 +105,11 @@ public class TaskServiceImpl implements TaskService{
     }
 
     @Override
-    public ApiResponse changePriority(Long taskId, TaskPriority priority) {
+    public ApiResponse changePriority(Long taskId, TaskPriority priority, UserDetails userDetails) {
         var task = findTask(taskId);
+        if (isNotCreator(userDetails, task)){
+            throw new InsufficientPermissionsException("Only the author can change the priority of his task");
+        }
         task.setPriority(priority);
         taskRepository.save(task);
 
@@ -113,12 +137,12 @@ public class TaskServiceImpl implements TaskService{
     }
 
     @Override
-    public Page<Task> readAll(Pageable pageable) {
-        return taskRepository.findAll(pageable);
+    public List<Task> readAll(Pageable pageable) {
+        return taskRepository.findAll();
     }
 
     @Override
-    public Page<Task> readByStatus(Pageable pageable, String status) {
+    public List<Task> readByStatus(Pageable pageable, String status) {
         if (!isTaskStatus(status)){
             throw new IllegalArgumentException("Wrong status");
         }
@@ -127,7 +151,7 @@ public class TaskServiceImpl implements TaskService{
     }
 
     @Override
-    public Page<Task> readByPriority(Pageable pageable, String priority) {
+    public List<Task> readByPriority(Pageable pageable, String priority) {
         if (!isPriority(priority)){
             throw new IllegalArgumentException("Wrong priority");
         }
@@ -142,12 +166,12 @@ public class TaskServiceImpl implements TaskService{
     }
 
     @Override
-    public Page<Task> tasksByAuthor(Long accountId, Pageable pageable) {
+    public List<Task> tasksByAuthor(Long accountId, Pageable pageable) {
         return taskRepository.findByAuthorId(accountId, pageable);
     }
 
     @Override
-    public Page<Task> tasksByAssignee(Long accountId, Pageable pageable) {
+    public List<Task> tasksByAssignee(Long accountId, Pageable pageable) {
         return taskRepository.findByAssigneeId(accountId, pageable);
     }
 }

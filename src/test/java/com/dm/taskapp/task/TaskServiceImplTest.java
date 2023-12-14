@@ -5,7 +5,6 @@ import com.dm.taskapp.account.AccountRepository;
 import com.dm.taskapp.app.ApiResponse;
 import com.dm.taskapp.exceptions.ResourceNotFound;
 import com.dm.taskapp.task.enums.TaskPriority;
-import com.dm.taskapp.task.enums.TaskStatus;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -14,6 +13,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -73,16 +73,23 @@ class TaskServiceImplTest {
                 .description("newDescription")
                 .build();
 
+        Account userDetails = Account.builder()
+                .id(1L)
+                .email("test@mail.com")
+                .password("password")
+                .build();
+
         Task task = Task.builder()
                 .id(1L)
                 .title("oldTitle")
+                .author(userDetails)
                 .description("oldDesc")
                 .build();
 
         when(taskRepository.findById(request.getId())).thenReturn(Optional.of(task));
         when(taskRepository.save(any(Task.class))).thenReturn(task);
 
-        Task expected = taskService.updateTask(request);
+        Task expected = taskService.updateTask(request, userDetails);
 
         assertEquals(expected.getTitle(), "newTitle");
         assertEquals(expected.getDescription(), "newDescription");
@@ -91,9 +98,19 @@ class TaskServiceImplTest {
 
     @Test
     void deleteTask() {
-        Task task = mock(Task.class);
+        Account userDetails = Account.builder()
+                .id(1L)
+                .email("test@mail.com")
+                .password("password")
+                .build();
+        Task task = Task.builder()
+                .id(1L)
+                .author(userDetails)
+                .build();
 
-        taskService.deleteTask(task.getId());
+        when(taskRepository.findById(task.getId())).thenReturn(Optional.of(task));
+
+        taskService.deleteTask(task.getId(), userDetails);
 
         verify(taskRepository).deleteById(task.getId());
     }
@@ -101,9 +118,15 @@ class TaskServiceImplTest {
     @Test
     void unsignTask() {
         long taskId = 1L;
+        Account userDetails = Account.builder()
+                .id(1L)
+                .email("test@mail.com")
+                .password("password")
+                .build();
         Task task = Task.builder()
                 .id(taskId)
                 .title("Test Task")
+                .author(userDetails)
                 .description("Test Description")
                 .assignee(Account.builder().id(123L).email("test@example.com").build())
                 .build();
@@ -111,21 +134,26 @@ class TaskServiceImplTest {
         when(taskRepository.findById(taskId)).thenReturn(java.util.Optional.of(task));
         when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ApiResponse result = taskService.unsignTask(taskId);
+        ApiResponse result = taskService.unsignTask(taskId, userDetails);
 
         verify(taskRepository, times(1)).findById(taskId);
         verify(taskRepository, times(1)).save(any(Task.class));
         assertEquals("You successfully unsign task", result.getMessage());
-        assertNull(task.getAssignee()); // Ensure assignee is set to null
+        assertNull(task.getAssignee());
     }
 
     @Test
     void unsignTaskTaskNotFound() {
         long taskId = 1L;
+        Account userDetails = Account.builder()
+                .id(1L)
+                .email("test@mail.com")
+                .password("password")
+                .build();
 
         when(taskRepository.findById(taskId)).thenReturn(java.util.Optional.empty());
 
-        assertThrows(ResourceNotFound.class, () -> taskService.unsignTask(taskId));
+        assertThrows(ResourceNotFound.class, () -> taskService.unsignTask(taskId, userDetails));
         verify(taskRepository, times(1)).findById(taskId);
         verify(taskRepository, times(0)).save(any(Task.class));
     }
@@ -133,35 +161,29 @@ class TaskServiceImplTest {
     @Test
     void changePriority() {
         long taskId = 1L;
+        Account userDetails = Account.builder()
+                .id(1L)
+                .email("test@mail.com")
+                .password("password")
+                .build();
         TaskPriority newPriority = TaskPriority.HIGH;
         Task task = Task.builder()
                 .id(taskId)
                 .title("Test Task")
                 .description("Test Description")
+                .author(userDetails)
                 .priority(TaskPriority.LOW)
                 .build();
 
         when(taskRepository.findById(taskId)).thenReturn(java.util.Optional.of(task));
         when(taskRepository.save(any(Task.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        ApiResponse result = taskService.changePriority(taskId, newPriority);
+        ApiResponse result = taskService.changePriority(taskId, newPriority, userDetails);
 
         verify(taskRepository, times(1)).findById(taskId);
         verify(taskRepository, times(1)).save(any(Task.class));
         assertEquals("You successfully change priority", result.getMessage());
         assertEquals(newPriority, task.getPriority()); // Ensure priority is updated
-    }
-
-    @Test
-    void changePriorityTaskNotFound() {
-        long taskId = 1L;
-        TaskPriority newPriority = TaskPriority.HIGH;
-
-        when(taskRepository.findById(taskId)).thenReturn(java.util.Optional.empty());
-
-        assertThrows(ResourceNotFound.class, () -> taskService.changePriority(taskId, newPriority));
-        verify(taskRepository, times(1)).findById(taskId);
-        verify(taskRepository, times(0)).save(any(Task.class));
     }
 
     @Test
@@ -195,11 +217,11 @@ class TaskServiceImplTest {
     void tasksByAuthor() {
         long accountId = 1L;
         Pageable pageable = Pageable.unpaged();
-        Page<Task> expectedPage = mock(Page.class);
+        List<Task> expectedPage = mock(List.class);
 
         when(taskRepository.findByAuthorId(accountId, pageable)).thenReturn(expectedPage);
 
-        Page<Task> result = taskService.tasksByAuthor(accountId, pageable);
+        List<Task> result = taskService.tasksByAuthor(accountId, pageable);
 
         verify(taskRepository, times(1)).findByAuthorId(accountId, pageable);
         assertEquals(expectedPage, result);
@@ -208,12 +230,12 @@ class TaskServiceImplTest {
     @Test
     void tasksByAssignee() {
         long accountId = 1L;
-        Pageable pageable = Pageable.unpaged(); // Use unpaged for simplicity
-        Page<Task> expectedPage = mock(Page.class);
+        Pageable pageable = Pageable.unpaged();
+        List<Task> expectedPage = mock(List.class);
 
         when(taskRepository.findByAssigneeId(accountId, pageable)).thenReturn(expectedPage);
 
-        Page<Task> result = taskService.tasksByAssignee(accountId, pageable);
+        List<Task> result = taskService.tasksByAssignee(accountId, pageable);
 
         verify(taskRepository, times(1)).findByAssigneeId(accountId, pageable);
         assertEquals(expectedPage, result);

@@ -20,6 +20,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Optional;
 
 @RestController
@@ -28,7 +29,6 @@ import java.util.Optional;
 @Tag(name = "Task management")
 public class TaskController {
     private final TaskService taskService;
-    private final TaskRepository repository;
 
     @PostMapping
     @Operation(
@@ -91,14 +91,14 @@ public class TaskController {
             },
             security = {@SecurityRequirement(name = "BearerJWT")}
     )
-    public ResponseEntity<Page<Task>> readAllTasks(
+    public ResponseEntity<List<Task>> readAllTasks(
             @RequestParam Optional<Integer> page,
             @RequestParam Optional<Integer> size,
             @RequestParam Optional<String> status,
             @RequestParam Optional<String> priority
     ) {
         Pageable pageable = PageRequest.of(page.orElse(0), size.orElse(10));
-        Page<Task> tasks;
+        List<Task> tasks;
 
         if (status.isPresent()) {
             tasks = taskService.readByStatus(pageable, status.get());
@@ -126,8 +126,10 @@ public class TaskController {
             },
             security = {@SecurityRequirement(name = "BearerJWT")}
     )
-    public ResponseEntity<Task> updateTask(@RequestBody TaskUpdateRequest request) {
-        Task updatedTask = taskService.updateTask(request);
+    public ResponseEntity<Task> updateTask(
+            @RequestBody TaskUpdateRequest request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        Task updatedTask = taskService.updateTask(request, userDetails);
         return ResponseEntity.ok(updatedTask);
     }
 
@@ -141,8 +143,10 @@ public class TaskController {
             },
             security = {@SecurityRequirement(name = "BearerJWT")}
     )
-    public ResponseEntity<Void> deleteTask(@PathVariable Long taskId) {
-        taskService.deleteTask(taskId);
+    public ResponseEntity<Void> deleteTask(
+            @PathVariable Long taskId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        taskService.deleteTask(taskId, userDetails);
         return ResponseEntity.noContent().build();
     }
 
@@ -158,8 +162,11 @@ public class TaskController {
             },
             security = {@SecurityRequirement(name = "BearerJWT")}
     )
-    public ResponseEntity<Task> assignTask(@PathVariable Long taskId, @PathVariable Long accountId) {
-        Task task = taskService.assignTask(taskId, accountId);
+    public ResponseEntity<Task> assignTask(
+            @PathVariable Long taskId,
+            @PathVariable Long accountId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        Task task = taskService.assignTask(taskId, accountId, userDetails);
         return ResponseEntity.ok(task);
     }
 
@@ -173,8 +180,10 @@ public class TaskController {
             },
             security = {@SecurityRequirement(name = "BearerJWT")}
     )
-    public ResponseEntity<?> unsignTask(@PathVariable Long taskId) {
-        taskService.unsignTask(taskId);
+    public ResponseEntity<?> unsignTask(
+            @PathVariable Long taskId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        taskService.unsignTask(taskId, userDetails);
         return ResponseEntity.noContent().build();
     }
 
@@ -220,9 +229,10 @@ public class TaskController {
     )
     public ResponseEntity<?> changePriority(
             @PathVariable Long taskId,
-            @RequestBody JsonNode json) {
+            @RequestBody JsonNode json,
+            @AuthenticationPrincipal UserDetails userDetails) {
         TaskPriority priority = TaskPriority.valueOf(json.get("taskPriotiry").asText());
-        taskService.changePriority(taskId, priority);
+        taskService.changePriority(taskId, priority, userDetails);
         return ResponseEntity.noContent().build();
     }
 
@@ -244,7 +254,7 @@ public class TaskController {
             },
             security = {@SecurityRequirement(name = "BearerJWT")}
     )
-    public ResponseEntity<Page<Task>> tasksByAuthor(
+    public ResponseEntity<List<Task>> tasksByAuthor(
             @PathVariable Long accountId,
             @RequestParam Optional<Integer> page,
             @RequestParam Optional<Integer> size)
@@ -271,7 +281,7 @@ public class TaskController {
             },
             security = {@SecurityRequirement(name = "BearerJWT")}
     )
-    public ResponseEntity<Page<Task>> tasksByAssignee(
+    public ResponseEntity<List<Task>> tasksByAssignee(
             @PathVariable Long accountId,
             @RequestParam Optional<Integer> page,
             @RequestParam Optional<Integer> size)

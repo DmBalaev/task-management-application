@@ -16,6 +16,11 @@ public class ApiExceptionHandler {
         log.error(e.getMessage(), e);
         return new ResponseEntity<>(new ApiResponse(e.getMessage()), HttpStatus.NOT_FOUND);
     }
+    @ExceptionHandler(InsufficientPermissionsException.class)
+    public ResponseEntity<ApiResponse> catchInsufficientPermissionsException(InsufficientPermissionsException e){
+        log.error(e.getMessage(), e);
+        return new ResponseEntity<>(new ApiResponse(e.getMessage()), HttpStatus.FORBIDDEN);
+    }
 
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<ApiResponse> catchApiException(ApiException e){
